@@ -104,9 +104,9 @@ func NewClient(config *rest.Config) (*K8sClient, error) {
 			}
 		}()
 		
-		// Add timeout for cache sync to prevent hanging indefinitely
-		// if user has no watch permissions for indexed resources (e.g. Pods).
-		syncCtx, syncCancel := context.WithTimeout(ctx, 30*time.Second)
+		// Add timeout (60s) for cache sync to prevent hanging indefinitely
+		// and allow enough time for initial bookmark events on slow connections.
+		syncCtx, syncCancel := context.WithTimeout(ctx, 60*time.Second)
 		defer syncCancel()
 		if !mgr.GetCache().WaitForCacheSync(syncCtx) {
 			cancel()

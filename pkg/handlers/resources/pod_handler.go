@@ -104,12 +104,10 @@ func GetPodMetrics(metricsMap map[string]metricsv1.PodMetrics, pod *corev1.Pod) 
 
 func (h *PodHandler) ListMetrics(c *gin.Context) (map[string]metricsv1.PodMetrics, error) {
 	cs := c.MustGet("cluster").(*cluster.ClientSet)
-	
-	// USE DIRECT CLIENT INSTEAD OF CACHED CLIENT TO AVOID HANG
-	// When using cs.K8sClient.List, controller-runtime tries to cache PodMetrics.
-	// If the user lacks permission to WATCH PodMetrics, it hangs waiting for cache sync.
-	// Using MetricsClient bypasses the cache.
-	
+
+	// FIX: Use MetricsClient directly to bypass controller-runtime cache
+	// This prevents hanging if the user lacks Watch permissions for metrics or connection is slow
+
 	listOpts := metav1.ListOptions{}
 	if labelSelector := c.Query("labelSelector"); labelSelector != "" {
 		listOpts.LabelSelector = labelSelector
@@ -122,7 +120,6 @@ func (h *PodHandler) ListMetrics(c *gin.Context) (map[string]metricsv1.PodMetric
 
 	metricsList, err := cs.K8sClient.MetricsClient.MetricsV1beta1().PodMetricses(namespace).List(c.Request.Context(), listOpts)
 	if err != nil {
-		// Log warning but don't fail the request, just return no metrics
 		klog.Warningf("Failed to list pod metrics: %v", err)
 		return nil, nil
 	}

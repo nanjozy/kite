@@ -40,8 +40,8 @@ func createClientSetInCluster(name, prometheusURL string) (*ClientSet, error) {
 	if err != nil {
 		return nil, err
 	}
-	// Set a reasonable timeout for in-cluster config as well, just in case
-	config.Timeout = 30 * time.Second
+	// Increase timeout to 60s to avoid timeouts on slow clusters
+	config.Timeout = 60 * time.Second
 
 	return newClientSet(name, config, prometheusURL)
 }
@@ -53,9 +53,9 @@ func createClientSetFromConfig(name, content, prometheusURL string) (*ClientSet,
 		return nil, err
 	}
 
-	// FIX: Increase timeout to 30s to avoid "TLS handshake timeout" on slow connections
+	// FIX: Set timeout to 60s to handle slow connections and avoid "event bookmark expired" / "TLS handshake timeout"
 	if restConfig.Timeout == 0 {
-		restConfig.Timeout = 30 * time.Second
+		restConfig.Timeout = 60 * time.Second
 	}
 
 	cs, err := newClientSet(name, restConfig, prometheusURL)
