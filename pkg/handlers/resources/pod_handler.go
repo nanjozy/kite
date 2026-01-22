@@ -26,7 +26,6 @@ import (
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/klog/v2"
 	metricsv1 "k8s.io/metrics/pkg/apis/metrics/v1beta1"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 type PodHandler struct {
@@ -105,24 +104,24 @@ func GetPodMetrics(metricsMap map[string]metricsv1.PodMetrics, pod *corev1.Pod) 
 
 func (h *PodHandler) ListMetrics(c *gin.Context) (map[string]metricsv1.PodMetrics, error) {
 	cs := c.MustGet("cluster").(*cluster.ClientSet)
-	var metricsList metricsv1.PodMetricsList
-	var listOpts []client.ListOption
-	if namespace := c.Param("namespace"); namespace != "" && namespace != "_all" {
-		listOpts = append(listOpts, client.InNamespace(namespace))
-	}
+
+	// FIX: Use MetricsClient directly to bypass controller-runtime cache
+	// This prevents hanging if the user lacks Watch permissions for metrics or connection is slow
+
+	listOpts := metav1.ListOptions{}
 	if labelSelector := c.Query("labelSelector"); labelSelector != "" {
-		selector, err := metav1.ParseToLabelSelector(labelSelector)
-		if err != nil {
-			return nil, fmt.Errorf("invalid labelSelector parameter: %w", err)
-		}
-		labelSelectorOption, err := metav1.LabelSelectorAsSelector(selector)
-		if err != nil {
-			return nil, fmt.Errorf("failed to convert labelSelector: %w", err)
-		}
-		listOpts = append(listOpts, client.MatchingLabelsSelector{Selector: labelSelectorOption})
+		listOpts.LabelSelector = labelSelector
 	}
-	if err := cs.K8sClient.List(c, &metricsList, listOpts...); err != nil {
+
+	namespace := c.Param("namespace")
+	if namespace == "_all" {
+		namespace = ""
+	}
+
+	metricsList, err := cs.K8sClient.MetricsClient.MetricsV1beta1().PodMetricses(namespace).List(c.Request.Context(), listOpts)
+	if err != nil {
 		klog.Warningf("Failed to list pod metrics: %v", err)
+		return nil, nil
 	}
 
 	metricsMap := lo.KeyBy(metricsList.Items, func(item metricsv1.PodMetrics) string {

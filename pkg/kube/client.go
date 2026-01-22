@@ -103,9 +103,14 @@ func NewClient(config *rest.Config) (*K8sClient, error) {
 				fmt.Printf("Error starting manager: %v\n", err)
 			}
 		}()
-		if !mgr.GetCache().WaitForCacheSync(ctx) {
+		
+		// Add timeout (60s) for cache sync to prevent hanging indefinitely
+		// and allow enough time for initial bookmark events on slow connections.
+		syncCtx, syncCancel := context.WithTimeout(ctx, 60*time.Second)
+		defer syncCancel()
+		if !mgr.GetCache().WaitForCacheSync(syncCtx) {
 			cancel()
-			return nil, fmt.Errorf("failed to wait for cache sync")
+			return nil, fmt.Errorf("failed to wait for cache sync (timeout)")
 		}
 		c = mgr.GetClient()
 	}
